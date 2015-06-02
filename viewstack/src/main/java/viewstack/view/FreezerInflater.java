@@ -54,6 +54,10 @@ public class FreezerInflater {
         return ((Bundle)parcelable).getInt(VISIBILITY_KEY);
     }
 
+    public void setVisibility(Parcelable parcelable, int visibility) {
+        ((Bundle)parcelable).putInt(VISIBILITY_KEY, visibility);
+    }
+
     public Class<? extends View> getClass(Parcelable parcelable) {
         //noinspection unchecked
         return (Class<? extends View>)((Bundle)parcelable).getSerializable(CLASS_KEY);
