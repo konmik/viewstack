@@ -16,15 +16,13 @@ public class FreezerInflater {
     private static final String CLASS_KEY = "class";
     private static final String VISIBILITY_KEY = "visibility";
 
-    private ViewGroup viewGroup;
     private LayoutInflater inflater;
 
-    public FreezerInflater(ViewGroup viewGroup, LayoutInflater inflater) {
-        this.viewGroup = viewGroup;
+    public FreezerInflater(LayoutInflater inflater) {
         this.inflater = inflater;
     }
 
-    public View inflate(int layoutId) {
+    public View inflate(ViewGroup viewGroup, int layoutId) {
         View view = inflater.inflate(layoutId, viewGroup, false);
         view.setTag(R.id.view_layout_id, layoutId);
         return view;
@@ -41,9 +39,9 @@ public class FreezerInflater {
         return bundle;
     }
 
-    public View unfreeze(Parcelable parcelable) {
+    public View unfreeze(ViewGroup viewGroup, Parcelable parcelable) {
         Bundle bundle = (Bundle)parcelable;
-        View view = inflate(bundle.getInt(LAYOUT_ID_KEY));
+        View view = inflate(viewGroup, bundle.getInt(LAYOUT_ID_KEY));
         view.restoreHierarchyState(bundle.getSparseParcelableArray(STATE_KEY));
         //noinspection ResourceType
         view.setVisibility(bundle.getInt(VISIBILITY_KEY));

@@ -10,6 +10,10 @@ import android.view.View;
 import android.widget.FrameLayout;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import viewstack.util.Lazy;
 
 public class FreezingLayout extends FrameLayout implements FreezingContainer {
 
@@ -18,7 +22,7 @@ public class FreezingLayout extends FrameLayout implements FreezingContainer {
     private static final String PARENT_KEY = "parent";
 
     private FreezerInflater inflater;
-    private ArrayList<Parcelable> frozen = new ArrayList<>();
+    private SparseArray<Parcelable> frozen = new SparseArray<>();
 
     public FreezingLayout(Context context) {
         super(context);
@@ -37,9 +41,23 @@ public class FreezingLayout extends FrameLayout implements FreezingContainer {
     }
 
     @Override
-    public View inflate(int index, int layoutId) {
-        View view = inflater.inflate(layoutId);
-        addView(view, getChildIndex(index));
+    public int getFrameId() {
+        return getId();
+    }
+
+    @Override
+    public View inflateTop(int frameId, int layoutId) {
+        View view = inflater.inflate(this, layoutId);
+        addView(view, getChildCount());
+        classes.invalidate();
+        return view;
+    }
+
+    @Override
+    public View inflateBottom(int frameId, int layoutId) {
+        View view = inflater.inflate(this, layoutId);
+        addView(view, 0);
+        classes.invalidate();
         return view;
     }
 
@@ -49,18 +67,8 @@ public class FreezingLayout extends FrameLayout implements FreezingContainer {
     }
 
     @Override
-    public int frozenCount() {
-        return frozen.size();
-    }
-
-    @Override
     public int size() {
-        return frozenCount() + permanentCount();
-    }
-
-    @Override
-    public boolean isFrozen(int index) {
-        return index < frozen.size();
+        return classes.get().size();
     }
 
     @Override
@@ -77,23 +85,21 @@ public class FreezingLayout extends FrameLayout implements FreezingContainer {
 
     @Override
     public void show(int index) {
+        if (index < frozen.size())
+            unfreeze(index);
         setVisibility(index, VISIBLE);
     }
 
     @Override
-    public void freeze(int index, int freezerIndex) {
-        frozen.add(freezerIndex, inflater.freeze(getView(index)));
+    public void freeze(int index) {
+        frozen.put(index, inflater.freeze(getView(index)));
         removeViewAt(index);
-    }
-
-    @Override
-    public void unfreeze(int index, int freezerIndex) {
-        addView(inflater.unfreeze(frozen.remove(freezerIndex)), getChildIndex(index));
     }
 
     @Override
     public void setNonPermanent(int index) {
         getView(index).setSaveFromParentEnabled(false);
+        classes.invalidate();
     }
 
     @Override
@@ -105,8 +111,39 @@ public class FreezingLayout extends FrameLayout implements FreezingContainer {
     }
 
     @Override
+    public List<Class> getClasses() {
+        return classes.get();
+    }
+
+    @Override
     public void removeFrozen() {
         frozen.clear();
+        classes.invalidate();
+    }
+
+    private Lazy<List<Class>> classes = new Lazy<>(new Lazy.Factory<List<Class>>() {
+        @Override
+        public List<Class> call() {
+            int childCount = getChildCount();
+            List<Class> classes = new ArrayList<>(frozen.size() + childCount);
+
+            for (int i = 0; i < frozen.size(); i++)
+                classes.add(inflater.getClass(frozen.get(i)));
+
+            for (int i = 0; i < childCount; i++) {
+                View view = getChildAt(i);
+                if (view.isSaveFromParentEnabled())
+                    classes.add(view.getClass());
+            }
+
+            return Collections.unmodifiableList(classes);
+        }
+    });
+
+    private void unfreeze(int index) {
+        Parcelable parcelable = frozen.get(index);
+        addView(inflater.unfreeze(this, parcelable), getChildIndex(index));
+        frozen.remove(index);
     }
 
     private int getChildIndex(int index) {
@@ -125,14 +162,6 @@ public class FreezingLayout extends FrameLayout implements FreezingContainer {
             getView(index - freezerSize).setVisibility(visibility);
     }
 
-    private int permanentCount() {
-        int count = 0;
-        for (int i = 0, size = getChildCount(); i < size; i++)
-            if (getChildAt(i).isSaveFromParentEnabled())
-                count++;
-        return count;
-    }
-
     @Override
     protected Parcelable onSaveInstanceState() {
         Bundle bundle = new Bundle();
@@ -143,7 +172,7 @@ public class FreezingLayout extends FrameLayout implements FreezingContainer {
                 children.add(inflater.freeze(child));
         }
         bundle.putParcelableArrayList(CHILDREN_KEY, children);
-        bundle.putParcelableArrayList(FREEZER_KEY, frozen);
+        bundle.putSparseParcelableArray(FREEZER_KEY, frozen);
         bundle.putParcelable(PARENT_KEY, super.onSaveInstanceState());
         return bundle;
     }
@@ -152,10 +181,11 @@ public class FreezingLayout extends FrameLayout implements FreezingContainer {
     protected void onRestoreInstanceState(Parcelable state) {
         Bundle bundle = (Bundle)state;
         super.onRestoreInstanceState(bundle.getParcelable(PARENT_KEY));
-        frozen = bundle.getParcelableArrayList(FREEZER_KEY);
+        frozen = bundle.getSparseParcelableArray(FREEZER_KEY);
         ArrayList<Parcelable> children = bundle.getParcelableArrayList(CHILDREN_KEY);
         for (Parcelable parcelable : children)
-            addView(inflater.unfreeze(parcelable));
+            addView(inflater.unfreeze(this, parcelable));
+        classes.invalidate();
     }
 
     @Override

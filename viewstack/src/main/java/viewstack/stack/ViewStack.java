@@ -22,10 +22,12 @@ public class ViewStack {
         this.handler = handler;
     }
 
-    public <T extends View> T push(int layoutId) {
+    public <T extends View> T push(int frameId, int layoutId) {
         onActionStart();
 
-        T view = inflateAction(container.size(), layoutId, ActionType.PUSH_IN);
+        //noinspection unchecked
+        T view = (T)container.inflateTop(frameId, layoutId);
+        runAction(ActionType.PUSH_IN, container.size() - 1);
 
         int required = analyzer.getRequiredVisibleCount(container.getClasses());
         for (int i = 0, size = container.size(); i < size - required; i++) {
@@ -54,29 +56,26 @@ public class ViewStack {
         onActionEnd.run();
     }
 
-    public <T extends View> T replace(int layoutId) {
+    public <T extends View> T replace(int frameId, int layoutId) {
         onActionStart();
 
+        container.removeFrozen();
         for (int i = 0, size = container.size(); i < size; i++) {
             if (!container.isHidden(i))
                 runAction(ActionType.REPLACE_OUT, i);
         }
 
-        T view = inflateAction(0, layoutId, ActionType.REPLACE_IN);
+        //noinspection unchecked
+        T view = (T)container.inflateBottom(frameId, layoutId);
+        runAction(ActionType.REPLACE_IN, 0);
 
         onActionEnd.run();
         return view;
     }
 
-    private <T extends View> T inflateAction(int index, int layoutId, ActionType actionType) {
-        //noinspection unchecked
-        T view = (T)container.inflate(index, layoutId);
-        runAction(actionType, index);
-        return view;
-    }
-
     private void runAction(ActionType actionType, int index) {
         onActionStart();
+
         final View view = container.getView(index);
         if (actionType.isExit())
             container.setNonPermanent(index);
@@ -84,6 +83,7 @@ public class ViewStack {
             @Override
             public void run() {
                 view.setVisibility(View.GONE);
+
                 onActionEnd.run();
             }
         });

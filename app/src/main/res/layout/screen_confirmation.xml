@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<info.android15.viewstackdemo.screens.ConfirmationScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#888">
+
+    <TextView
+        android:id="@+id/text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/default_background_selector_with_white"
+        android:freezesText="true"
+        android:padding="16dp"
+        android:text="Q?"
+        android:textSize="18sp" />
+
+</info.android15.viewstackdemo.screens.ConfirmationScreen>
