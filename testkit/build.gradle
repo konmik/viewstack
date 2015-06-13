@@ -1,4 +1,4 @@
-apply plugin: 'com.android.application'
+apply plugin: 'com.android.library'
 
 android {
     compileSdkVersion rootProject.compileSdkVersion
@@ -11,5 +11,7 @@ android {
 }
 
 dependencies {
-    compile project(':viewstack')
+    compile 'org.mockito:mockito-core:1.9.5'
+    compile 'com.google.dexmaker:dexmaker:1.0'
+    compile 'com.google.dexmaker:dexmaker-mockito:1.0'
 }

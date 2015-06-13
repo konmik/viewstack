@@ -8,9 +8,8 @@ import info.android15.viewstackdemo.R;
 import viewstack.action.ActionHandler;
 import viewstack.action.ActionType;
 import viewstack.requirement.AnnotationRequirementsAnalyzer;
-import viewstack.stack.FreezingContainerGroup;
+import viewstack.stack.FreezingViewGroupGroup;
 import viewstack.stack.ViewStack;
-import viewstack.view.FreezerInflater;
 import viewstack.view.FreezingLayout;
 
 public class MainActivity extends Activity {
@@ -23,12 +22,10 @@ public class MainActivity extends Activity {
         setContentView(R.layout.main_activity);
 
         FreezingLayout mainFrame = (FreezingLayout)findViewById(R.id.mainFrame);
-        mainFrame.setFreezerInflater(new FreezerInflater(getLayoutInflater()));
         FreezingLayout popupFrame = (FreezingLayout)findViewById(R.id.popupFrame);
-        popupFrame.setFreezerInflater(new FreezerInflater(getLayoutInflater()));
 
         viewStack = new ViewStack(
-            new FreezingContainerGroup(mainFrame, popupFrame),
+            new FreezingViewGroupGroup(mainFrame, popupFrame),
             new AnnotationRequirementsAnalyzer(),
             new ActionHandler() {
                 @Override

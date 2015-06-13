@@ -2,27 +2,137 @@ package viewstack.view;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.os.Parcel;
 import android.os.Parcelable;
 import android.support.annotation.NonNull;
 import android.util.AttributeSet;
 import android.util.SparseArray;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.FrameLayout;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
-import viewstack.util.Lazy;
+import viewstack.util.ViewHierarchyFn;
 
-public class FreezingLayout extends FrameLayout implements FreezingContainer {
+import static java.util.Collections.unmodifiableList;
+
+public class FreezingLayout extends FrameLayout implements FreezingViewGroup {
 
     private static final String CHILDREN_KEY = "children";
-    private static final String FREEZER_KEY = "frozen";
     private static final String PARENT_KEY = "parent";
 
-    private FreezerInflater inflater;
-    private SparseArray<Parcelable> frozen = new SparseArray<>();
+    private static class ViewStateImpl implements ViewState, Parcelable {
+        private FreezingLayout freezingLayout;
+
+        private int layoutId;
+        private Class viewClass;
+        private int visibility;
+
+        private View view;
+        private byte[] frozen;
+        private byte[] state;
+
+        public ViewStateImpl(FreezingLayout freezingLayout, View view, int layoutId) {
+            this.freezingLayout = freezingLayout;
+            this.layoutId = layoutId;
+            viewClass = view.getClass();
+            visibility = view.getVisibility();
+            this.view = view;
+        }
+
+        @Override
+        public View getView() {
+            return view;
+        }
+
+        @Override
+        public Class getViewClass() {
+            return viewClass;
+        }
+
+        @Override
+        public boolean isFrozen() {
+            return frozen != null;
+        }
+
+        @Override
+        public void freeze() {
+            frozen = ViewHierarchyFn.freezeHierarchy(ViewHierarchyFn.getHierarchy(view));
+            freezingLayout.removeView(view);
+        }
+
+        @Override
+        public void unfreeze() {
+            view = freezingLayout.inflateAdd(layoutId, ViewHierarchyFn.unfreezeHierarchy(frozen), true);
+            frozen = null;
+            view.setVisibility(visibility);
+        }
+
+        @Override
+        public boolean isHidden() {
+            return visibility != VISIBLE;
+        }
+
+        @Override
+        public void hide() {
+            visibility = GONE;
+            view.setVisibility(GONE);
+        }
+
+        @Override
+        public void show() {
+            visibility = VISIBLE;
+            view.setVisibility(VISIBLE);
+        }
+
+        @Override
+        public void setNonPermanent() {
+            freezingLayout.setNonPermanent(this);
+        }
+
+        @Override
+        public int describeContents() { return 0; }
+
+        @Override
+        public void writeToParcel(Parcel dest, int flags) {
+            dest.writeInt(layoutId);
+            dest.writeSerializable(viewClass);
+            dest.writeInt(visibility);
+            dest.writeByteArray(frozen);
+            dest.writeByteArray(view == null ? null : ViewHierarchyFn.freezeHierarchy(ViewHierarchyFn.getHierarchy(view)));
+        }
+
+        protected ViewStateImpl(Parcel in) {
+            this.layoutId = in.readInt();
+            this.viewClass = (Class)in.readSerializable();
+            this.visibility = in.readInt();
+            this.frozen = in.createByteArray();
+            this.state = in.createByteArray();
+        }
+
+        private void onRestoreInstanceState(FreezingLayout freezingLayout) {
+            this.freezingLayout = freezingLayout;
+            if (state != null) {
+                view = freezingLayout.inflateAdd(layoutId, ViewHierarchyFn.unfreezeHierarchy(state), true);
+                view.setVisibility(visibility);
+                state = null;
+            }
+        }
+
+        public static final Creator<ViewStateImpl> CREATOR = new Creator<ViewStateImpl>() {
+            public ViewStateImpl createFromParcel(Parcel source) {
+                return new ViewStateImpl(source);
+            }
+
+            public ViewStateImpl[] newArray(int size) {
+                return new ViewStateImpl[size];
+            }
+        };
+    }
+
+    private ArrayList<ViewState> states = new ArrayList<>();
 
     public FreezingLayout(Context context) {
         super(context);
@@ -36,8 +146,12 @@ public class FreezingLayout extends FrameLayout implements FreezingContainer {
         super(context, attrs, defStyleAttr);
     }
 
-    public void setFreezerInflater(FreezerInflater inflater) {
-        this.inflater = inflater;
+    private View inflateAdd(int layoutId, SparseArray<Parcelable> state, boolean visualTop) {
+        View view = LayoutInflater.from(getContext()).inflate(layoutId, this, false);
+        if (state != null)
+            view.restoreHierarchyState(state);
+        addView(view, visualTop ? getChildCount() : 0);
+        return view;
     }
 
     @Override
@@ -46,133 +160,45 @@ public class FreezingLayout extends FrameLayout implements FreezingContainer {
     }
 
     @Override
-    public View inflateTop(int frameId, int layoutId) {
-        View view = inflater.inflate(this, layoutId);
-        addView(view, getChildCount());
-        classes.invalidate();
-        return view;
+    public ViewState inflate(int frameId, int layoutId, boolean visualTop) {
+        View view = inflateAdd(layoutId, null, visualTop);
+        ViewStateImpl state = new ViewStateImpl(this, view, layoutId);
+        states.add(state);
+        return state;
     }
 
     @Override
-    public View inflateBottom(int frameId, int layoutId) {
-        View view = inflater.inflate(this, layoutId);
-        addView(view, 0);
-        classes.invalidate();
-        return view;
-    }
-
-    @Override
-    public View getView(int index) {
-        return getChildAt(getChildIndex(index));
-    }
-
-    @Override
-    public int size() {
-        return classes.get().size();
-    }
-
-    @Override
-    public boolean isHidden(int index) {
-        int freezerSize = frozen.size();
-        int visibility = index < freezerSize ? inflater.getVisibility(frozen.get(index)) : getView(index - freezerSize).getVisibility();
-        return visibility != VISIBLE;
-    }
-
-    @Override
-    public void hide(int index) {
-        setVisibility(index, GONE);
-    }
-
-    @Override
-    public void show(int index) {
-        if (index < frozen.size())
-            unfreeze(index);
-        setVisibility(index, VISIBLE);
-    }
-
-    @Override
-    public void freeze(int index) {
-        frozen.put(index, inflater.freeze(getView(index)));
-        removeViewAt(index);
-    }
-
-    @Override
-    public void setNonPermanent(int index) {
-        getView(index).setSaveFromParentEnabled(false);
-        classes.invalidate();
+    public List<ViewState> getViewStates() {
+        return unmodifiableList(states);
     }
 
     @Override
     public void removeNonPermanent() {
         for (int i = getChildCount() - 1; i >= 0; i--) {
-            if (!getChildAt(i).isSaveFromParentEnabled())
+            View childAt = getChildAt(i);
+            boolean found = false;
+            for (ViewState state : states) {
+                if (state.getView() == childAt) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
                 removeViewAt(i);
         }
     }
 
-    @Override
-    public List<Class> getClasses() {
-        return classes.get();
-    }
-
-    @Override
-    public void removeFrozen() {
-        frozen.clear();
-        classes.invalidate();
-    }
-
-    private Lazy<List<Class>> classes = new Lazy<>(new Lazy.Factory<List<Class>>() {
-        @Override
-        public List<Class> call() {
-            int childCount = getChildCount();
-            List<Class> classes = new ArrayList<>(frozen.size() + childCount);
-
-            for (int i = 0; i < frozen.size(); i++)
-                classes.add(inflater.getClass(frozen.get(i)));
-
-            for (int i = 0; i < childCount; i++) {
-                View view = getChildAt(i);
-                if (view.isSaveFromParentEnabled())
-                    classes.add(view.getClass());
-            }
-
-            return Collections.unmodifiableList(classes);
-        }
-    });
-
-    private void unfreeze(int index) {
-        Parcelable parcelable = frozen.get(index);
-        addView(inflater.unfreeze(this, parcelable), getChildIndex(index));
-        frozen.remove(index);
-    }
-
-    private int getChildIndex(int index) {
-        for (int i = 0, size = getChildCount(); index >= 0; i++) {
-            if ((i >= size || getChildAt(i).isSaveFromParentEnabled()) && index-- == 0)
-                return i;
-        }
-        throw new IndexOutOfBoundsException();
-    }
-
-    private void setVisibility(int index, int visibility) {
-        int freezerSize = frozen.size();
-        if (index < freezerSize)
-            inflater.setVisibility(frozen.get(index), visibility);
-        else
-            getView(index - freezerSize).setVisibility(visibility);
+    private void setNonPermanent(ViewStateImpl viewState) {
+        states.remove(viewState);
     }
 
     @Override
     protected Parcelable onSaveInstanceState() {
         Bundle bundle = new Bundle();
-        ArrayList<Parcelable> children = new ArrayList<>();
-        for (int i = 0; i < getChildCount(); i++) {
-            View child = getChildAt(i);
-            if (child.isSaveFromParentEnabled())
-                children.add(inflater.freeze(child));
-        }
-        bundle.putParcelableArrayList(CHILDREN_KEY, children);
-        bundle.putSparseParcelableArray(FREEZER_KEY, frozen);
+        ArrayList<Parcelable> parcelables = new ArrayList<>(states.size());
+        for (ViewState state : states)
+            parcelables.add((Parcelable)state);
+        bundle.putParcelableArrayList(CHILDREN_KEY, parcelables);
         bundle.putParcelable(PARENT_KEY, super.onSaveInstanceState());
         return bundle;
     }
@@ -181,11 +207,12 @@ public class FreezingLayout extends FrameLayout implements FreezingContainer {
     protected void onRestoreInstanceState(Parcelable state) {
         Bundle bundle = (Bundle)state;
         super.onRestoreInstanceState(bundle.getParcelable(PARENT_KEY));
-        frozen = bundle.getSparseParcelableArray(FREEZER_KEY);
-        ArrayList<Parcelable> children = bundle.getParcelableArrayList(CHILDREN_KEY);
-        for (Parcelable parcelable : children)
-            addView(inflater.unfreeze(this, parcelable));
-        classes.invalidate();
+        ArrayList<Parcelable> parcelables = bundle.getParcelableArrayList(CHILDREN_KEY);
+        for (Parcelable parcelable : parcelables) {
+            ViewStateImpl s = (ViewStateImpl)parcelable;
+            s.onRestoreInstanceState(this);
+            states.add(s);
+        }
     }
 
     @Override
