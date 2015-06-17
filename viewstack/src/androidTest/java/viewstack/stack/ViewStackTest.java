@@ -13,6 +13,7 @@ import viewstack.requirement.RequirementsAnalyzer;
 import viewstack.view.FreezingViewGroup;
 import viewstack.view.ViewState;
 
+import static java.lang.Math.max;
 import static org.mockito.Matchers.anyList;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyBoolean;
@@ -29,7 +30,7 @@ public class ViewStackTest extends TestCase {
 
     @SuppressWarnings("unchecked")
     public void testPush() throws Exception {
-        for (int backStackSize = 0; backStackSize < 3; backStackSize++) {
+        for (int backStackSize = 0; backStackSize < 5; backStackSize++) {
             FreezingViewGroup freezingViewGroup = mock(FreezingViewGroup.class);
             TransitionDelegate transitionDelegate = mock(TransitionDelegate.class);
             RequirementsAnalyzer analyzer = mock(RequirementsAnalyzer.class);
@@ -39,9 +40,11 @@ public class ViewStackTest extends TestCase {
             View view = mock(View.class);
             when(freezingViewGroup.inflate(anyInt(), anyInt(), anyBoolean())).thenReturn(viewState);
             when(viewState.getView()).thenReturn(view);
-            when(analyzer.analyze(any(List.class))).thenReturn(new RequirementsAnalyzer.Analysis(1, 1));
 
-            List<ViewState> states = new ArrayList<>();
+            RequirementsAnalyzer.Analysis analysis = new RequirementsAnalyzer.Analysis(1, max(1, backStackSize / 2));
+            when(analyzer.analyze(any(List.class))).thenReturn(analysis);
+
+            List<ViewState> states = new ArrayList<>(backStackSize);
             for (int i = 0; i < backStackSize; i++) {
                 View v = mock(View.class);
                 ViewState mock = mock(ViewState.class);
@@ -60,7 +63,8 @@ public class ViewStackTest extends TestCase {
             verify(freezingViewGroup, atLeastOnce()).getViewStates();
             verifyNoMoreInteractions(freezingViewGroup);
 
-            for (int i = 0; i < backStackSize; i++) {
+            int shouldBePushedOut = backStackSize - analysis.visible + 1;
+            for (int i = 0; i < shouldBePushedOut; i++) {
                 View view1 = states.get(i).getView();
                 verify(transitionDelegate, times(1)).onStackAction(eq(TransitionType.PUSH_OUT), eq(view1), any(Runnable.class));
             }
@@ -73,6 +77,44 @@ public class ViewStackTest extends TestCase {
     }
 
     public void testPop() throws Exception {
+        for (int frozen = 0; frozen < 5; frozen++)
+            for (int hidden = 0; hidden < 5; hidden++)
+                for (int visible = frozen + hidden == 0 ? 1 : 0; visible < 5; visible++)
+                    testPop(frozen, hidden, visible);
+    }
+
+    public ViewState mockViewState(View view, boolean isFrozen, boolean isHidden) {
+        ViewState mock = mock(ViewState.class);
+        when(mock.isFrozen()).thenReturn(isFrozen);
+        when(mock.isHidden()).thenReturn(isHidden);
+        when(mock.getView()).thenReturn(view);
+        if (view != null)
+            when(mock.getViewClass()).thenReturn(view.getClass());
+        return mock;
+    }
+
+    private void testPop(int frozen, int hidden, int visible) throws Exception {
+        FreezingViewGroup freezingViewGroup = mock(FreezingViewGroup.class);
+        TransitionDelegate transitionDelegate = mock(TransitionDelegate.class);
+        RequirementsAnalyzer analyzer = mock(RequirementsAnalyzer.class);
+
+        int required = 1 + frozen / 2;
+        int visible1 = visible + hidden / 2;
+        when(analyzer.analyze(anyList())).thenReturn(new RequirementsAnalyzer.Analysis(required, visible1));
+
+        List<ViewState> states = new ArrayList<>(frozen + hidden + 1);
+        for (int f = 0; f < frozen; f++)
+            states.add(mockViewState(mock(View.class), true, true));
+        for (int h = 0; h < hidden; h++)
+            states.add(mockViewState(mock(View.class), false, true));
+        for (int v = 0; v < visible; v++)
+            states.add(mockViewState(mock(View.class), false, false));
+        states.add(mockViewState(mock(View.class), false, false));
+        when(freezingViewGroup.getViewStates()).thenReturn(states);
+
+        ViewStack stack = new ViewStack(freezingViewGroup, analyzer, transitionDelegate);
+        stack.pop();
+
 
     }
 
