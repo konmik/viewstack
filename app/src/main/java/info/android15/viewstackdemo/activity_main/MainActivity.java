@@ -5,8 +5,8 @@ import android.os.Bundle;
 import android.view.View;
 
 import info.android15.viewstackdemo.R;
-import viewstack.action.ActionHandler;
-import viewstack.action.ActionType;
+import viewstack.action.TransitionDelegate;
+import viewstack.action.TransitionType;
 import viewstack.requirement.AnnotationRequirementsAnalyzer;
 import viewstack.stack.FreezingViewGroupGroup;
 import viewstack.stack.ViewStack;
@@ -27,10 +27,10 @@ public class MainActivity extends Activity {
         viewStack = new ViewStack(
             new FreezingViewGroupGroup(mainFrame, popupFrame),
             new AnnotationRequirementsAnalyzer(),
-            new ActionHandler() {
+            new TransitionDelegate() {
                 @Override
-                public void onStackAction(ActionType action, View view, Runnable onActionEnd) {
-                    onActionEnd.run();
+                public void onStackAction(TransitionType transition, View view, Runnable onTransitionEnd) {
+                    onTransitionEnd.run();
                 }
             }
         );

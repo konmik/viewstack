@@ -3,6 +3,17 @@ package viewstack.requirement;
 import java.util.List;
 
 public interface RequirementsAnalyzer {
+
+    class Analysis {
+        public final int required;
+        public final int visible;
+
+        public Analysis(int required, int visible) {
+            this.required = required;
+            this.visible = visible;
+        }
+    }
+
     /**
      * A method that should return a number of views in an underlying stack that are required by the
      * given top view's class. This number should also include views that are between
@@ -18,7 +29,5 @@ public interface RequirementsAnalyzer {
      * @param stack a list of classes of views in a stack.
      * @return a number of views that are required to keep stack integrity.
      */
-    int getRequiredCount(List<Class> stack);
-
-    int getRequiredVisibleCount(List<Class> stack);
+    Analysis analyze(List<Class> stack);
 }

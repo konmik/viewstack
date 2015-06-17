@@ -1,4 +1,4 @@
-package viewstack.util;
+package viewstack.internal;
 
 /**
  * This class allows to apply some basic OOP patterns:

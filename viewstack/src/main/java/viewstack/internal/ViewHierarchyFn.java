@@ -1,4 +1,4 @@
-package viewstack.util;
+package viewstack.internal;
 
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -6,6 +6,13 @@ import android.util.SparseArray;
 import android.view.View;
 
 public class ViewHierarchyFn {
+
+    public static SparseArray<Parcelable> getHierarchy(View view) {
+        SparseArray<Parcelable> states = new SparseArray<>();
+        view.saveHierarchyState(states);
+        return states;
+    }
+
     public static byte[] freezeHierarchy(SparseArray<Parcelable> hierarchy) {
         Parcel parcel = Parcel.obtain();
         parcel.writeInt(hierarchy.size());
@@ -27,11 +34,5 @@ public class ViewHierarchyFn {
             hierarchy.put(parcel.readInt(), parcel.readParcelable(null));
         parcel.recycle();
         return hierarchy;
-    }
-
-    public static SparseArray<Parcelable> getHierarchy(View view) {
-        SparseArray<Parcelable> states = new SparseArray<>();
-        view.saveHierarchyState(states);
-        return states;
     }
 }

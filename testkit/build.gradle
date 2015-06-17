@@ -11,7 +11,7 @@ android {
 }
 
 dependencies {
-    compile 'org.mockito:mockito-core:1.9.5'
-    compile 'com.google.dexmaker:dexmaker:1.0'
-    compile 'com.google.dexmaker:dexmaker-mockito:1.0'
+    compile 'org.mockito:mockito-core:2.0.14-beta'
+    compile 'com.google.dexmaker:dexmaker:1.2'
+    compile 'com.google.dexmaker:dexmaker-mockito:1.2'
 }

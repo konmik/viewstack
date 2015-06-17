@@ -2,9 +2,9 @@ package viewstack.action;
 
 /**
  * Action is a unit of work that is done by the {@link viewstack.stack.ViewStack} stack on a child view.
- * This enum's single use is for {@link viewstack.action.ActionHandler} interface.
+ * This enum's single use is for {@link TransitionDelegate} interface.
  */
-public enum ActionType {
+public enum TransitionType {
 
     /**
      * A view is going to be shown with {@link viewstack.stack.ViewStack#push}.
@@ -53,7 +53,7 @@ public enum ActionType {
     private boolean out;
     private boolean exit;
 
-    ActionType(boolean out, boolean exit) {
+    TransitionType(boolean out, boolean exit) {
         this.out = out;
         this.exit = exit;
     }

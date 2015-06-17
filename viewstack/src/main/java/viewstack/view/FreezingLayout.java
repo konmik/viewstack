@@ -14,7 +14,7 @@ import android.widget.FrameLayout;
 import java.util.ArrayList;
 import java.util.List;
 
-import viewstack.util.ViewHierarchyFn;
+import viewstack.internal.ViewHierarchyFn;
 
 import static java.util.Collections.unmodifiableList;
 
@@ -24,7 +24,7 @@ public class FreezingLayout extends FrameLayout implements FreezingViewGroup {
     private static final String PARENT_KEY = "parent";
 
     private static class ViewStateImpl implements ViewState, Parcelable {
-        private FreezingLayout freezingLayout;
+        private FreezingLayout layout;
 
         private int layoutId;
         private Class viewClass;
@@ -34,8 +34,8 @@ public class FreezingLayout extends FrameLayout implements FreezingViewGroup {
         private byte[] frozen;
         private byte[] state;
 
-        public ViewStateImpl(FreezingLayout freezingLayout, View view, int layoutId) {
-            this.freezingLayout = freezingLayout;
+        public ViewStateImpl(FreezingLayout layout, View view, int layoutId) {
+            this.layout = layout;
             this.layoutId = layoutId;
             viewClass = view.getClass();
             visibility = view.getVisibility();
@@ -60,12 +60,13 @@ public class FreezingLayout extends FrameLayout implements FreezingViewGroup {
         @Override
         public void freeze() {
             frozen = ViewHierarchyFn.freezeHierarchy(ViewHierarchyFn.getHierarchy(view));
-            freezingLayout.removeView(view);
+            layout.removeView(view);
+            view = null;
         }
 
         @Override
         public void unfreeze() {
-            view = freezingLayout.inflateAdd(layoutId, ViewHierarchyFn.unfreezeHierarchy(frozen), true);
+            view = layout.inflateAdd(layoutId, ViewHierarchyFn.unfreezeHierarchy(frozen), true);
             frozen = null;
             view.setVisibility(visibility);
         }
@@ -89,7 +90,7 @@ public class FreezingLayout extends FrameLayout implements FreezingViewGroup {
 
         @Override
         public void setNonPermanent() {
-            freezingLayout.setNonPermanent(this);
+            layout.setNonPermanent(this);
         }
 
         @Override
@@ -112,10 +113,10 @@ public class FreezingLayout extends FrameLayout implements FreezingViewGroup {
             this.state = in.createByteArray();
         }
 
-        private void onRestoreInstanceState(FreezingLayout freezingLayout) {
-            this.freezingLayout = freezingLayout;
+        private void onRestoreInstanceState(FreezingLayout layout) {
+            this.layout = layout;
             if (state != null) {
-                view = freezingLayout.inflateAdd(layoutId, ViewHierarchyFn.unfreezeHierarchy(state), true);
+                view = layout.inflateAdd(layoutId, ViewHierarchyFn.unfreezeHierarchy(state), true);
                 view.setVisibility(visibility);
                 state = null;
             }

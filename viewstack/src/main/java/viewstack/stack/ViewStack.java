@@ -5,8 +5,8 @@ import android.view.View;
 import java.util.ArrayList;
 import java.util.List;
 
-import viewstack.action.ActionHandler;
-import viewstack.action.ActionType;
+import viewstack.action.TransitionDelegate;
+import viewstack.action.TransitionType;
 import viewstack.requirement.RequirementsAnalyzer;
 import viewstack.view.FreezingViewGroup;
 import viewstack.view.ViewState;
@@ -15,27 +15,27 @@ public class ViewStack {
 
     private FreezingViewGroup container;
     private RequirementsAnalyzer analyzer;
-    private ActionHandler handler;
+    private TransitionDelegate transitionDelegate;
     private int actionCounter;
 
-    public ViewStack(FreezingViewGroup container, RequirementsAnalyzer analyzer, ActionHandler handler) {
+    public ViewStack(FreezingViewGroup container, RequirementsAnalyzer analyzer, TransitionDelegate transitionDelegate) {
         this.container = container;
         this.analyzer = analyzer;
-        this.handler = handler;
+        this.transitionDelegate = transitionDelegate;
     }
 
     public <T extends View> T push(int frameId, int layoutId) {
         onActionStart();
 
         ViewState state = container.inflate(frameId, layoutId, true);
-        runAction(ActionType.PUSH_IN, state);
+        runAction(TransitionType.PUSH_IN, state);
 
-        int required = analyzer.getRequiredVisibleCount(getViewClasses(container.getViewStates()));
+        RequirementsAnalyzer.Analysis analysis = analyzer.analyze(getViewClasses());
         List<ViewState> states = container.getViewStates();
-        for (int i = 0, size = states.size(); i < size - required; i++) {
+        for (int i = 0, size = states.size(); i < size - analysis.visible; i++) {
             ViewState viewState = states.get(i);
             if (!viewState.isHidden())
-                runAction(ActionType.PUSH_OUT, viewState);
+                runAction(TransitionType.PUSH_OUT, viewState);
         }
 
         onActionEnd.run();
@@ -47,21 +47,22 @@ public class ViewStack {
         onActionStart();
 
         List<ViewState> states = container.getViewStates();
-        runAction(ActionType.POP_OUT, states.get(states.size() - 1));
+        runAction(TransitionType.POP_OUT, states.get(states.size() - 1));
 
-        List<Class> classes = getViewClasses(container.getViewStates());
+        List<Class> classes = getViewClasses();
         classes.remove(classes.size() - 1);
 
         int size = classes.size();
-        int startVisible = size - analyzer.getRequiredVisibleCount(classes);
-        int startRequired = size - analyzer.getRequiredCount(classes);
+        RequirementsAnalyzer.Analysis analysis = analyzer.analyze(classes);
+        int startVisible = size - analysis.required;
+        int startRequired = size - analysis.visible;
         for (int i = 0; i < size; i++) {
             ViewState viewState = states.get(i);
             if (startRequired <= i && viewState.isFrozen())
                 viewState.unfreeze();
             if (startVisible <= i && viewState.isHidden()) {
                 viewState.show();
-                runAction(ActionType.POP_IN, viewState);
+                runAction(TransitionType.POP_IN, viewState);
             }
         }
 
@@ -74,23 +75,23 @@ public class ViewStack {
         List<ViewState> states = container.getViewStates();
         for (ViewState state : states) {
             if (!state.isHidden())
-                runAction(ActionType.REPLACE_OUT, state);
+                runAction(TransitionType.REPLACE_OUT, state);
             state.setNonPermanent();
         }
 
         ViewState viewState = container.inflate(frameId, layoutId, false);
-        runAction(ActionType.REPLACE_IN, viewState);
+        runAction(TransitionType.REPLACE_IN, viewState);
 
         onActionEnd.run();
         //noinspection unchecked
         return (T)viewState.getView();
     }
 
-    private void runAction(ActionType actionType, final ViewState viewState) {
+    private void runAction(TransitionType transitionType, final ViewState viewState) {
         onActionStart();
-        if (actionType.isExit())
+        if (transitionType.isExit())
             viewState.setNonPermanent();
-        handler.onStackAction(actionType, viewState.getView(), !actionType.isOut() ? onActionEnd : new Runnable() {
+        transitionDelegate.onStackAction(transitionType, viewState.getView(), !transitionType.isOut() ? onActionEnd : new Runnable() {
             @Override
             public void run() {
                 viewState.hide();
@@ -113,10 +114,11 @@ public class ViewStack {
     };
 
     private void onAllActionsEnd() {
-        List<Class> classes = getViewClasses(container.getViewStates());
+        List<Class> classes = getViewClasses();
         int size = classes.size();
-        int startVisible = size - analyzer.getRequiredVisibleCount(classes);
-        int startRequired = size - analyzer.getRequiredCount(classes);
+        RequirementsAnalyzer.Analysis analysis = analyzer.analyze(classes);
+        int startVisible = size - analysis.required;
+        int startRequired = size - analysis.visible;
         List<ViewState> states = container.getViewStates();
         for (int i = 0; i < size; i++) {
             ViewState state = states.get(i);
@@ -128,7 +130,8 @@ public class ViewStack {
         container.removeNonPermanent();
     }
 
-    private List<Class> getViewClasses(List<ViewState> states) {
+    private List<Class> getViewClasses() {
+        List<ViewState> states = container.getViewStates();
         List<Class> list = new ArrayList<>(states.size());
         for (ViewState state : states)
             list.add(state.getViewClass());

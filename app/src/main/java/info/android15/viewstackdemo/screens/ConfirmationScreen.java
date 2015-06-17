@@ -7,7 +7,7 @@ import android.widget.FrameLayout;
 
 import viewstack.requirement.RequiredViews;
 
-@RequiredViews(visible = View.class, dependencies = ConfirmationScreen.DialogScreenOwner.class)
+@RequiredViews(visible = View.class, required = ConfirmationScreen.DialogScreenOwner.class)
 public class ConfirmationScreen extends FrameLayout {
 
     public interface DialogScreenOwner {
